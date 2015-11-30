@@ -40,6 +40,18 @@ def _sequences(sample_records):
 def serialize(session, study, records_16s, files_16s, records_wgs, files_wgs,
               unsequenced_records, submission_fname, ready_fname, products_dir, 
               dcc_user, dcc_pw, study_id=None):
+    """
+    Download raw sequence files and serialize metadata into xml for a
+    cutlass.Study
+
+    :arg dcc_user: the user used for the cutlass.iHMPSession
+
+    :arg dcc_pw: String; the password used for the cutlass.iHMPSession
+
+    :arg study_id: String; OSDF-given ID for the study you want to serialize
+    """
+
+
     cached_dir_16s = dirname(files_16s[0]) if files_16s else products_dir
     cached_dir_wgs = dirname(files_wgs[0]) if files_wgs else products_dir
     local_fnames_16s = set()
@@ -101,6 +113,20 @@ def serialize(session, study, records_16s, files_16s, records_wgs, files_wgs,
 
 def upload(files_16s, files_wgs, sub_fname, ready_fname,
            keyfile, remote_path, remote_srv, user, ftp_pass=None):
+    """Upload raw sequence files and xml.
+
+    :arg keyfile: String; absolute filepath to private SSH keyfile for
+    access to NCBI's submission server
+
+    :arg remote_path: String; the directory on the NCBI submission
+    server where to upload data
+
+    :arg remote_srv: String; TLD of NCBI's submission server
+
+    :arg user: String; username used to access NCBI's submission server
+
+    """
+
     to_upload = list(files_16s)+list(files_wgs)
     if ftp_pass:
         uptodate = [ftp.gen_uptodate(remote_srv, remote_path, user, ftp_pass)]

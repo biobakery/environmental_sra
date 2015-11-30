@@ -31,6 +31,34 @@ def filter_unsequenced(records_wgs, records_16s):
         
 
 class DCCSRAPipeline(anadama.pipelines.Pipeline):
+    """Pipeline for submitting metadata from the iHMP DCC's OSDF instance
+    to NCBI's SRA.
+
+    Steps:
+
+    1. Query OSDF for all samples, preps, and raw sequence sets for a
+       given study
+
+    2. For each raw sequence, download the raw sequence file if it's
+    not available locally
+
+    3. Serialize all metadata useful for SRA from OSDF into a
+    submission.xml file
+
+    4. Create an empty submit.empty file.
+
+    5. Upload raw sequence files to SRA as necessary
+
+    6. Upload submission.xml and submit.ready file
+
+    Workflows used:
+
+    * :py:func:`dcc_sra.workflows.serialize`
+    * :py:func:`dcc_sra.workflows.upload`
+
+    """
+
+
     name = "DCCSRA"
     products = {
         "cached_16s_files": list(),
@@ -58,7 +86,6 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
     workflows = {
         "serialize": workflows.serialize,
         "upload": workflows.upload,
-        "report": workflows.report,
     }
 
     def __init__(self, cached_16s_files=list(),
@@ -66,6 +93,22 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
                  products_dir=str(),
                  workflow_options=dict(),
                  *args, **kwargs):
+
+        """Initialize the pipeline.
+
+        :keyword cached_16s_files: List of strings; raw 16S sequence
+        files (fasta or fastq format) already downloaded.
+
+        :keyword cached_16s_files: List of strings;raw WGS sequence
+        files (fasta or fastq format) already downloaded.
+
+        :keyword products_dir: String; Directory path for where outputs will 
+                               be saved.
+
+        :keyword workflow_options: Dictionary; **opts to be fed into the 
+                                   respective workflow functions.
+
+        """
 
         super(DCCSRAPipeline, self).__init__(*args, **kwargs)
 
