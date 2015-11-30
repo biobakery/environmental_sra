@@ -78,16 +78,19 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
         if not os.path.isdir(self.products_dir):
             os.mkdir(self.products_dir)
 
-        if not self.options['serialize']['dcc_pw']:
+        if not self.options['serialize'].get('dcc_user', None):
             default = getpass.getuser()
             prompt = "Enter your DCC username: (%s)"%(default)
-            self.options['serialize']['dcc_user'] = raw_input(prompt)
+            entered = raw_input(prompt)
+            if not entered:
+                entered = default
+            self.options['serialize']['dcc_user'] = entered
 
-        if not self.options['serialize']['study_id']:
+        if not self.options['serialize'].get('study_id', None):
             prompt = "Enter the study ID to submit: "
             self.options['serialize']['study_id'] = raw_input(prompt)
 
-        if not self.options['serialize']['dcc_pw']:
+        if not self.options['serialize'].get('dcc_pw', None):
             prompt = "Enter your DCC password: "
             self.options['serialize']['dcc_pw'] = getpass.getpass(prompt)
 
