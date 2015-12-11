@@ -1,4 +1,7 @@
 import os
+import re
+import sys
+import time
 from os.path import join
 from os.path import dirname
 from os.path import basename
@@ -9,9 +12,11 @@ import xml.etree.ElementTree as ET
 
 import cutlass.aspera as asp
 
-from . import ftp
+from . import ssh
 from .serialize import indent
 from .serialize import to_xml
+from .util import reportnum
+from .update import update_osdf_from_report
 
 def fsize(fname):
     return os.stat(fname).st_size
@@ -44,11 +49,11 @@ def serialize(session, study, records_16s, files_16s, records_wgs, files_wgs,
     Download raw sequence files and serialize metadata into xml for a
     cutlass.Study
 
-    :arg dcc_user: the user used for the cutlass.iHMPSession
+    :param dcc_user: the user used for the cutlass.iHMPSession
 
-    :arg dcc_pw: String; the password used for the cutlass.iHMPSession
+    :param dcc_pw: String; the password used for the cutlass.iHMPSession
 
-    :arg study_id: String; OSDF-given ID for the study you want to serialize
+    :param study_id: String; OSDF-given ID for the study you want to serialize
     """
 
 
@@ -111,33 +116,31 @@ def serialize(session, study, records_16s, files_16s, records_wgs, files_wgs,
     }
 
 
-def upload(files_16s, files_wgs, sub_fname, ready_fname,
-           keyfile, remote_path, remote_srv, user, ftp_pass=None):
+def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
+           remote_path, remote_srv, user):
     """Upload raw sequence files and xml.
 
-    :arg keyfile: String; absolute filepath to private SSH keyfile for
+    :param keyfile: String; absolute filepath to private SSH keyfile for
     access to NCBI's submission server
 
-    :arg remote_path: String; the directory on the NCBI submission
+    :param remote_path: String; the directory on the NCBI submission
     server where to upload data
 
-    :arg remote_srv: String; TLD of NCBI's submission server
+    :param remote_srv: String; TLD of NCBI's submission server
 
-    :arg user: String; username used to access NCBI's submission server
+    :param user: String; username used to access NCBI's submission server
 
     """
 
     to_upload = list(files_16s)+list(files_wgs)
-    if ftp_pass:
-        uptodate = [ftp.gen_uptodate(remote_srv, remote_path, user, ftp_pass)]
-    else:
-        uptodate = list() 
+    ssh_session = ssh.SSHConnection(user, remote_srv, keyfile, remote_path)
+    uptodate = [ssh_session.uptodate]
 
     def _upload(local_fname, complete_fname, blithely=False):
         def _u():
             ret = asp.upload_file(remote_srv, user, None, local_fname,
                                   remote_path, keyfile=keyfile)
-            if ret:
+            if blithely or ret:
                 open(complete_fname, 'w').close()
             return blithely or ret # return True if blithely is True
         return _u
@@ -167,7 +170,37 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname,
     }
 
 
-def report():
-    pass
+def report(session, ready_complete_fname, user, remote_srv,
+           remote_path, keyfile):
+    reports_dir = dirname(ready_complete_fname)
+    def _download():
+        c = ssh.SSHConnection(user, remote_srv, keyfile, remote_path)
+        for _ in range(60*20*2): # 20 minutes in half-seconds
+            report_fnames = [basename(n) for n in c.files()
+                             if re.search(r'report\.[\d.]*xml', n)
+                             and not exists(join(reports_dir, basename(n)))]
+            if report_fnames:
+                break
+            else:
+                time.sleep(.5)
+        for n in report_fnames:
+            if exists(join(reports_dir, n)):
+                continue
+            asp.download_file(remote_srv, user, None, join(remote_path, n),
+                              reports_dir, keyfile=keyfile)
+        if not report_fnames:
+            print >> sys.stderr, "Timed out waiting for report xml files."
+            return False
+        most_recent_report = max(report_fnames, key=reportnum)
+        update_osdf_from_report(session, join(reports_dir, most_recent_report))
+
+    yield {
+        "name": "report:get_reports",
+        "actions": [_download],
+        "file_dep": [ready_complete_fname],
+        "uptodate": [False],
+        "targets": [],
+    }
+    
 
 

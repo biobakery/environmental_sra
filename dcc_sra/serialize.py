@@ -121,7 +121,7 @@ def _add_bioproject(root, st):
     return root
 
 
-def _add_biosample(root, st, sample, ncbi_taxon_id):
+def _add_biosample(root, st, sample, prep):
     sample = reg_sample(sample)
     ret = hier_sub(root, "Action", children=[
         eld("AddData", attrs={"target_db":"BioSample"}, children=[
@@ -140,7 +140,7 @@ def _add_biosample(root, st, sample, ncbi_taxon_id):
                                           sample.mixs['body_product'])),
     ])
     hier_sub(bs_node, "Organism",
-             attrs={"taxonomy_id": ncbi_taxon_id},
+             attrs={"taxonomy_id": prep.ncbi_taxon_id},
              children=[eld("OrganismName", text="Metagenome")])
     hier_sub(bs_node, "Package", text="MIMS.me.human-associated.4.0")
     kv = lambda k, v: eld("Attribute", attrs={"attribute_name": k}, text=v)
@@ -194,8 +194,8 @@ def to_xml(st, samples):
         if not sample.prepseqs:
             continue
         taxon_id = sample.prepseqs[0][0].ncbi_taxon_id
-        root = _add_biosample(root, st, sample.sample, taxon_id)
         for prep, seq in sample.prepseqs:
+            root = _add_biosample(root, st, sample.sample, prep)
             root = _add_sra(root, st, sample.sample, prep, seq)
 
     return root

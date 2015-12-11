@@ -76,7 +76,6 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
             "remote_path": "/submit/Test/Fulltest",
             "remote_srv" : "upload.ncbi.nlm.nih.gov",
             "user": "asp-hmp2",
-            "ftp_pass": None
         },
         "report": {
             "products_dir": "reports"
@@ -180,4 +179,5 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
                                submission_file, ready_file,
                                **self.options['upload'])
 
-        # yield workflows.report(self.products_dir, **self.options['upload'])
+        yield workflows.report(session, ready_file+".complete",
+                               **self.options['upload'])
