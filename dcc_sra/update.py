@@ -2,9 +2,11 @@ import sys
 import xml.etree.ElementTree as ET
 
 def handle_error(r):
-    msg_text = ""
-    for m in r.iter("Message"):
-        msg_text += r.text + "\n"
+    obj_id = r.iter("Object").next().get("spuid")
+    msg_text = "Problem with: " + obj_id + "\n"
+    for m in r.iter():
+        if m.text and m.text.strip():
+            msg_text += m.text.strip() + "\n"
     return msg_text
 
 
