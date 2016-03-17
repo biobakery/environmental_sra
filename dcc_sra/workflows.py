@@ -124,7 +124,8 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
     access to NCBI's submission server
 
     :param remote_path: String; the directory on the NCBI submission
-    server where to upload data
+    server where to upload data. If unset, the remote_path is
+    automatically determined.
 
     :param remote_srv: String; TLD of NCBI's submission server
 

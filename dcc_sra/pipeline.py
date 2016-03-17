@@ -1,4 +1,6 @@
 import os
+import re
+import unicodedata
 import getpass
 
 import cutlass
@@ -30,6 +32,11 @@ def filter_unsequenced(records_wgs, records_16s):
     return [SubmitRecord(s, []) for s in unsequenced], recs_16s, recs_wgs
         
 
+def _remote_path(options):
+    study_id = options['serialize']['study_id']
+    return "/submit/Production/{}/".format(study_id)
+
+
 class DCCSRAPipeline(anadama.pipelines.Pipeline):
     """Pipeline for submitting metadata from the iHMP DCC's OSDF instance
     to NCBI's SRA.
@@ -55,6 +62,7 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
 
     * :py:func:`dcc_sra.workflows.serialize`
     * :py:func:`dcc_sra.workflows.upload`
+    * :py:func:`dcc_sra.workflows.report`
 
     """
 
@@ -73,7 +81,7 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
         },
         "upload": {
             "keyfile": "/home/rschwager/test_data/broad_metadata/dcc_sra/iHMP_SRA_key",
-            "remote_path": "/submit/Test/Fulltest",
+            "remote_path": None,
             "remote_srv" : "upload.ncbi.nlm.nih.gov",
             "user": "asp-hmp2",
         },
@@ -112,7 +120,8 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
         super(DCCSRAPipeline, self).__init__(*args, **kwargs)
 
         self.options = self.default_options.copy()
-        self.options.update(workflow_options)
+        for k in self.options.iterkeys():
+            self.options[k].update(workflow_options.get(k,{}))
 
         if not products_dir:
             products_dir = self.options['report']['products_dir']
@@ -135,6 +144,9 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
         if not self.options['serialize'].get('dcc_pw', None):
             prompt = "Enter your DCC password: "
             self.options['serialize']['dcc_pw'] = getpass.getpass(prompt)
+
+        if not self.options['upload'].get('remote_path', None):
+            self.options['upload']['remote_path'] = _remote_path(self.options)
 
         if not self.options['upload']['remote_path'].endswith('/'):
             self.options['upload']['remote_path'] += '/'
