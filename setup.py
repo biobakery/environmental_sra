@@ -11,6 +11,7 @@ setup(
         'anadama',
         'osdf-python',
         'cutlass',
+        'paramiko'
     ],
     classifiers=[
         "Development Status :: 2 - Pre-Alpha"
