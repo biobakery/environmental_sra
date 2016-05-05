@@ -148,6 +148,8 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
 
     complete_fnames = [f+".complete" for f in to_upload]
     for f, complete_fname in zip(to_upload, complete_fnames):
+        if f.endswith(".complete"):
+            continue
         yield {
             "name": "upload: "+basename(f),
             "actions": [_upload(f, complete_fname)],
