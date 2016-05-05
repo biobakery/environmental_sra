@@ -1,6 +1,4 @@
 import os
-import re
-import unicodedata
 import getpass
 
 import cutlass

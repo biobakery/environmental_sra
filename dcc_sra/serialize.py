@@ -163,6 +163,7 @@ def _add_biosample(root, st, sample, prep):
 def _add_sra(root, st, sample, prep, seq):
     kv = lambda k, v: eld("Attribute", attrs={"name": k}, text=v)
     strategy = "AMPLICON" if prep_subtype(prep) == "16s" else "WGS"
+    mims_or_mimarks = prep.mimarks if prep_subtype(prep) == "16s" else prep.mims
     hier_sub(root, "Action", children=[
         eld("AddFiles", attrs={"target_db": "SRA"}, children=[
             eld("File", attrs={"file_path":basename(seq.urls[0])},
@@ -173,7 +174,7 @@ def _add_sra(root, st, sample, prep, seq):
             kv("library_selection", prep.lib_selection.upper()),
             kv("library_layout", "FRAGMENT"),
             kv("library_construction_protocol",
-               reg_text(prep.mimarks['lib_const_meth'])),
+               reg_text(mims_or_mimarks['lib_const_meth'])),
             eld("AttributeRefId", attrs={"name": "BioProject"}, children=[
                 eld("RefId", children=[spuid(st)])
             ]),
@@ -193,7 +194,6 @@ def to_xml(st, samples):
     for sample in samples:
         if not sample.prepseqs:
             continue
-        taxon_id = sample.prepseqs[0][0].ncbi_taxon_id
         for prep, seq in sample.prepseqs:
             root = _add_biosample(root, st, sample.sample, prep)
             root = _add_sra(root, st, sample.sample, prep, seq)

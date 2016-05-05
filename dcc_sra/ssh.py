@@ -1,10 +1,15 @@
 import os
 import time
-import socket
 import pipes
+import socket
+import string
+import operator
 from os.path import join, basename
 
 import paramiko
+
+
+last = operator.itemgetter(-1)
 
 class SSHConnection(object):
     def __init__(self, user, host, keyfile, remote_path):
@@ -19,6 +24,23 @@ class SSHConnection(object):
         self.chan.get_pty()
         self.chan.invoke_shell()
         self._recvall()
+        self._path_check()
+
+
+    def _path_check(self):
+        self.remote_path = self.remote_path.rstrip('/')
+        head, tail = os.path.split(self.remote_path)
+        ret = self.execute("ls -l "+head)
+        fields = map(string.split, ret.strip().split('\r\n')[2:-1])
+        names = dict(  zip(map(last, fields), fields) )
+        if tail not in names:
+            self.execute("mkdir "+self.remote_path)
+            return
+        if tail in names and not names[tail][0].startswith("d"):
+            self.execute("rm "+self.remote_path)
+            self.execute("mkdir "+self.remote_path)
+            return
+
 
     def _wait(self, tries=5):
         for i in range(tries):
@@ -26,6 +48,7 @@ class SSHConnection(object):
             if self.chan.recv_ready():
                 return True
         return False
+
         
     def _recvall(self):
         ret = str()
@@ -37,6 +60,7 @@ class SSHConnection(object):
                     break
         return ret
 
+
     def execute(self, cmd, verbose=False):
         if not cmd.endswith("\n"):
             cmd += "\n"
@@ -44,6 +68,7 @@ class SSHConnection(object):
             print "sending `%s'"%(cmd)
         self.chan.send(cmd)
         return self._recvall()
+
 
     def fsize(self, fname):
         quoted = pipes.quote(fname)
@@ -53,6 +78,7 @@ class SSHConnection(object):
         except ValueError:
             return None
 
+
     def uptodate(self, task, values):
         for fname in task.file_dep:
             if not os.path.exists(fname):
@@ -60,7 +86,6 @@ class SSHConnection(object):
             remote_fname = join(self.remote_path, basename(fname))
             return self.fsize(remote_fname) == os.stat(fname).st_size
                 
+
     def files(self):
         return self.execute("ls "+self.remote_path).strip().split('\r\n')[1:-1]
-
-    
