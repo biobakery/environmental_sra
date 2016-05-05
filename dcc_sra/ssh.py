@@ -71,12 +71,14 @@ class SSHConnection(object):
 
 
     def fsize(self, fname):
-        quoted = pipes.quote(fname)
+        quoted = pipes.quote(join(self.remote_path, fname))
         output = self.execute("ls -l "+quoted).split("\n")[1].strip()
         try:
             return int(output.split(None, 8)[4])
         except ValueError:
             return None
+        except IndexError:
+            raise OSError(output)
 
 
     def uptodate(self, task, values):
