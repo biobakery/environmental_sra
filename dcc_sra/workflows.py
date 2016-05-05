@@ -117,7 +117,7 @@ def serialize(session, study, records_16s, files_16s, records_wgs, files_wgs,
 
 
 def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
-           remote_path, remote_srv, user):
+           remote_path, remote_srv, user, products_dir):
     """Upload raw sequence files and xml.
 
     :param keyfile: String; absolute filepath to private SSH keyfile for
@@ -133,7 +133,8 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
 
     """
 
-    to_upload = list(files_16s)+list(files_wgs)
+    to_upload = [ f for f in list(files_16s)+list(files_wgs)
+                  if not f.endswith(".complete") ]
     ssh_session = ssh.SSHConnection(user, remote_srv, keyfile, remote_path)
     uptodate = [ssh_session.uptodate]
 
@@ -146,10 +147,9 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
             return blithely or ret # return True if blithely is True
         return _u
 
-    complete_fnames = [f+".complete" for f in to_upload]
+    complete_fnames = [util.new_file(f+".complete", basedir=products_dir) 
+                       for f in to_upload]
     for f, complete_fname in zip(to_upload, complete_fnames):
-        if f.endswith(".complete"):
-            continue
         yield {
             "name": "upload: "+basename(f),
             "actions": [_upload(f, complete_fname)],

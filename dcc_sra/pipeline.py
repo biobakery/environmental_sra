@@ -187,6 +187,7 @@ class DCCSRAPipeline(anadama.pipelines.Pipeline):
         yield workflows.upload(self.cached_16s_files,
                                self.cached_wgs_files,
                                submission_file, ready_file,
+                               products_dir=self.products_dir,
                                **self.options['upload'])
 
         yield workflows.report(session, ready_file+".complete",
