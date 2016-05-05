@@ -10,6 +10,7 @@ from urlparse import urlparse
 from collections import defaultdict
 import xml.etree.ElementTree as ET
 
+from anadama.util import new_file
 import cutlass.aspera as asp
 
 from . import ssh
@@ -147,7 +148,7 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
             return blithely or ret # return True if blithely is True
         return _u
 
-    complete_fnames = [util.new_file(f+".complete", basedir=products_dir) 
+    complete_fnames = [new_file(f+".complete", basedir=products_dir) 
                        for f in to_upload]
     for f, complete_fname in zip(to_upload, complete_fnames):
         yield {
