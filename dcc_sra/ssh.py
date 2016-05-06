@@ -25,7 +25,7 @@ class SSHConnection(object):
         self.chan.invoke_shell()
         self._recvall()
         self._path_check()
-
+        self.file_cache = self._build_file_cache()
 
     def _path_check(self):
         self.remote_path = self.remote_path.rstrip('/')
@@ -41,6 +41,20 @@ class SSHConnection(object):
             self.execute("mkdir "+self.remote_path)
             return
 
+
+    def _build_file_cache(self):
+        cache = dict()
+        output = self.execute("ls -l "+self.remote_path).strip()
+        for line in output.split('\r\n')[2:-1]:
+            fields = line.split(None, 8)
+            name = os.path.join(self.remote_path, fields[-1])
+            try:
+                size = int(fields[4])
+            except ValueError:
+                continue
+            cache[name] = size
+        return cache
+            
 
     def _wait(self, tries=5):
         for i in range(tries):
@@ -86,8 +100,9 @@ class SSHConnection(object):
             if not os.path.exists(fname):
                 return False
             remote_fname = join(self.remote_path, basename(fname))
-            return self.fsize(remote_fname) == os.stat(fname).st_size
-                
+            if remote_fname not in self.file_cache:
+                return False
+            return self.file_cache[remote_fname] == os.stat(fname).st_size
 
     def files(self):
         return self.execute("ls "+self.remote_path).strip().split('\r\n')[1:-1]
