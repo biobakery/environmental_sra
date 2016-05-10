@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import json
 import time
 from os.path import join
 from os.path import dirname
@@ -11,13 +12,14 @@ from collections import defaultdict
 import xml.etree.ElementTree as ET
 
 from anadama.util import new_file
-import cutlass.aspera as asp
+from anadama.util import matcher
+from cutlass.aspera import aspera as asp
 
 from . import ssh
 from .serialize import indent
 from .serialize import to_xml
 from .util import reportnum
-from .update import update_osdf_from_report
+from .update import print_report
 
 def fsize(fname):
     return os.stat(fname).st_size
@@ -43,61 +45,50 @@ def _sequences(sample_records):
     return [ grp[0] for grp in grouped.itervalues() ]
 
 
-def serialize(session, study, records_16s, files_16s, records_wgs, files_wgs,
-              unsequenced_records, submission_fname, ready_fname, products_dir, 
-              dcc_user, dcc_pw, study_id=None):
-    """
-    Download raw sequence files and serialize metadata into xml for a
-    cutlass.Study
+class Bag(object):
+    pass
 
-    :param dcc_user: the user used for the cutlass.iHMPSession
+find_file = lambda n, h:  matcher.find_match(n,h, kmer_lengths=(2,3))
+_hash = lambda v: "{}{}".format(0 if v < 0 else 1, abs(hash(v)))
 
-    :param dcc_pw: String; the password used for the cutlass.iHMPSession
+class MyDict(dict):
+    id = None
 
-    :param study_id: String; OSDF-given ID for the study you want to serialize
-    """
+def gen_samples_seqs(study, metadata, seqinfo, files):
+    with open(metadata, 'r') as f:
+        recs = json.load(f)
+    with open(seqinfo, 'r') as f:
+        seqinfo = json.load(f)
+    samples_seqs = list()
+    for rec in recs:
+        seq = Bag()
+        seq.path = os.path.abspath(find_file(rec['SampleID'], files))
+        seq.seq_model = seqinfo['seq_model']
+        seq.lib_const = seqinfo['lib_const']
+        seq.method = seqinfo['method']
+        seq.id = study.id+":seq:"+_hash(basename(seq.path))
+        sample = MyDict(rec)
+        sample.id = study.id+":sample:"+_hash(rec['SampleID'])
+        samples_seqs.append((sample, seq))
+    return samples_seqs
+        
 
-
-    cached_dir_16s = dirname(files_16s[0]) if files_16s else products_dir
-    cached_dir_wgs = dirname(files_wgs[0]) if files_wgs else products_dir
-    local_fnames_16s = set()
-    local_fnames_wgs = set()
-    for fname in files_16s:
-        local_fnames_16s.add(basename(fname))
-    for fname in files_wgs:
-        local_fnames_wgs.add(basename(fname))
-
-    def _download(url, local_dir):
-        def _d():
-            srv, remote_path = parse_fasp_url(url)
-            ret = asp.download_file(srv, dcc_user, dcc_pw,
-                                    remote_path, local_dir)
-            return ret
-        return _d
-
-    args = ([local_fnames_16s, cached_dir_16s, records_16s, files_16s],
-            [local_fnames_wgs, cached_dir_wgs, records_wgs, files_wgs])
-    for skip_these, local_dir, rec_container, file_container in args:
-        for seq in _sequences(rec_container):
-            remote_fname = basename(seq.urls[0])
-            target = join(local_dir, remote_fname)
-            u2d = lambda *a, **kw: exists(target) and fsize(target) == seq.size
-            if not seq.urls:
-                raise Exception("Sequence ID %s has no urls"%(seq.id))
-            if remote_fname in skip_these and fsize(target) == seq.size:
-                continue
-            yield {
-                "name": "serialize:download: "+remote_fname,
-                "actions": [_download(seq.urls[0], local_dir)],
-                "file_dep": [],
-                "uptodate": [u2d],
-                "targets": [target]
-            }
-            file_container.append(target)
+def serialize(study_json, qiime_metadata, seqinfo_16s, files_16s,
+              wgs_metadata, seqinfo_wgs, files_wgs, submission_fname,
+              ready_fname, products_dir):
 
     def _write_xml():
-        samples = list(records_16s)+list(records_wgs)+list(unsequenced_records)
-        xml = to_xml(study, samples)
+        with open(study_json) as f:
+            st = json.load(f)
+        study = Bag()
+        study.name = st['name']
+        study.description = st['description']
+        study.id = _hash(study.name)
+        samples_seqs = gen_samples_seqs(study, qiime_metadata,
+                                        seqinfo_16s, files_16s)
+        samples_seqs += gen_samples_seqs(study, wgs_metadata,
+                                         seqinfo_wgs, files_wgs)
+        xml = to_xml(study, samples_seqs)
         indent(xml)
         et = ET.ElementTree(xml)
         et.write(submission_fname)
@@ -105,7 +96,7 @@ def serialize(session, study, records_16s, files_16s, records_wgs, files_wgs,
     yield {
         "name": "serialize:xml: "+submission_fname,
         "actions": [_write_xml],
-        "file_dep": [],
+        "file_dep": [qiime_metadata, wgs_metadata],
         "targets": [submission_fname]
     }
 
@@ -141,6 +132,11 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
 
     def _upload(local_fname, complete_fname, blithely=False):
         def _u():
+            with open(sub_fname, 'r') as f:
+                b = basename(local_fname)
+                if b not in ("submission.xml", "submit.ready") \
+                   and b not in f.read():
+                    return
             ret = asp.upload_file(remote_srv, user, None, local_fname,
                                   remote_path, keyfile=keyfile)
             if blithely or ret:
@@ -148,8 +144,8 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
             return blithely or ret # return True if blithely is True
         return _u
 
-    complete_fnames = [new_file(f+".complete", basedir=products_dir) 
-                       for f in to_upload]
+    complete_fnames = [f+".complete" for f in to_upload
+                       if not f.endswith(".complete")]
     for f, complete_fname in zip(to_upload, complete_fnames):
         yield {
             "name": "upload: "+basename(f),
@@ -174,8 +170,8 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
     }
 
 
-def report(session, ready_complete_fname, user, remote_srv,
-           remote_path, keyfile):
+def report(ready_complete_fname, user, remote_srv, remote_path,
+           keyfile):
     reports_dir = dirname(ready_complete_fname)
     def _download():
         c = ssh.SSHConnection(user, remote_srv, keyfile, remote_path)
@@ -196,7 +192,7 @@ def report(session, ready_complete_fname, user, remote_srv,
             print >> sys.stderr, "Timed out waiting for report xml files."
             return False
         most_recent_report = max(report_fnames, key=reportnum)
-        update_osdf_from_report(session, join(reports_dir, most_recent_report))
+        print_report(join(reports_dir, most_recent_report))
 
     yield {
         "name": "report:get_reports",

@@ -12,7 +12,7 @@ def float_please(s):
 
 def halve_list(l):
     half = len(l)/2
-    return l[half:], l[:half]
+    return l[:half], l[half:]
 
 def spacejoin(l):
     return " ".join(l)
@@ -38,8 +38,8 @@ def is_cardinal(d):
 def _reg_cardinal(lat, lon):
     lat_dir = "S" if "s" in lat else "N"
     lon_dir = "W" if "w" in lon else "E"
-    return ("%f %s"%(float_please(lat), lat_dir),
-            "%f %s"%(float_please(lon), lon_dir))
+    return ("%.2f %s"%(float_please(lat), lat_dir),
+            "%.2f %s"%(float_please(lon), lon_dir))
 
 def reg_cardinal(d):
     lat, lon = parse_str(d)
