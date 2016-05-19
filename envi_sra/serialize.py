@@ -70,7 +70,11 @@ def reg_text(t):
     return " ".join(t.split())
 
 def reg_sample(s):
-    s['lat_lon'] = " ".join(geo.cardinal(s['lat_lon']))
+    try:
+        reg_geo = " ".join(geo.cardinal(s['lat_lon']))
+    except ValueError:
+        reg_geo = "missing"
+    s['lat_lon'] = reg_geo
     return s
 
 
@@ -121,15 +125,8 @@ def _add_bioproject(root, st):
     return root
 
 
-reqd_mims_keys = ['rel_air_humidity', 'organism_count',
-                  'abs_air_humidity', 'lat_lon', 'env_feature',
-                  'heat_cool_type', 'collection_date',
-                  'space_typ_state', 'ventilation_type', 'env_biome',
-                  'geo_loc_name', 'building_setting',
-                  'typ_occupant_dens', 'indoor_space', 'filter_type',
-                  'env_material', 'occup_samp', 'build_occup_type',
-                  'air_temp', 'carb_dioxide', 'occupant_dens_samp',
-                  'light_type']
+reqd_mims_keys = ['collection_date', 'env_biome', 'env_feature',
+                  'env_material', 'geo_loc_name', 'host', 'lat_lon' ]
 
 
 def _add_biosample(root, st, sample):
@@ -147,12 +144,12 @@ def _add_biosample(root, st, sample):
     bs_node = flatten_list(ret)[-3]
     hier_sub(bs_node, "SampleId", children=[spuid(sample)])
     hier_sub(bs_node, "Descriptor", children=[
-        eld("Title", text="College campus dust sample"),
+        eld("Title", text=sample['title']+" "+sample['SampleID']),
     ])
     hier_sub(bs_node, "Organism",
              attrs={"taxonomy_id": "256318"},
              children=[eld("OrganismName", text="Metagenome")])
-    hier_sub(bs_node, "Package", text="MIMS.me.built.4.0")
+    hier_sub(bs_node, "Package", text="MIMS.me.human-gut.4.0")
     kv = lambda k, v: eld("Attribute", attrs={"attribute_name": k}, text=v)
     get = lambda v: sample.get(v, "missing")
     hier_sub(bs_node, "Attributes", children=[
@@ -168,9 +165,9 @@ def _add_sra(root, st, sample, seq):
             eld("File", attrs={"file_path":basename(seq.path)},
                 children=[eld("DataType", text="generic-data")]),
             kv("instrument_model",seq.seq_model),
-            kv("library_strategy",seq.lib_const),
+            kv("library_strategy", "AMPLICON"),
             kv("library_source", "GENOMIC"),
-            kv("library_selection", seq.lib_const),
+            kv("library_selection", "PCR"),
             kv("library_layout", "FRAGMENT"),
             kv("library_construction_protocol", reg_text(seq.method)),
             eld("AttributeRefId", attrs={"name": "BioProject"}, children=[

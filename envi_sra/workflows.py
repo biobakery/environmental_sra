@@ -48,7 +48,19 @@ def _sequences(sample_records):
 class Bag(object):
     pass
 
-find_file = lambda n, h:  matcher.find_match(n,h, kmer_lengths=(2,3))
+# def find_file(needle, haystack):
+#     try:
+#         it = (h for h in haystack if needle.split("_", 1)[0] in h)
+#         return next(it)
+#     except StopIteration:
+#         return None
+
+# def find_file(needle, haystack):
+#     results = matcher.closest(needle, haystack, (2,3))
+#     if len(results) > 1:
+#         return None
+#     return results[0][1]
+
 _hash = lambda v: "{}{}".format(0 if v < 0 else 1, abs(hash(v)))
 
 class MyDict(dict):
@@ -62,7 +74,10 @@ def gen_samples_seqs(study, metadata, seqinfo, files):
     samples_seqs = list()
     for rec in recs:
         seq = Bag()
-        seq.path = os.path.abspath(find_file(rec['SampleID'], files))
+        match = rec.get('filename', None)
+        if not match:
+            continue
+        seq.path = os.path.abspath(match)
         seq.seq_model = seqinfo['seq_model']
         seq.lib_const = seqinfo['lib_const']
         seq.method = seqinfo['method']
@@ -84,10 +99,13 @@ def serialize(study_json, qiime_metadata, seqinfo_16s, files_16s,
         study.name = st['name']
         study.description = st['description']
         study.id = _hash(study.name)
-        samples_seqs = gen_samples_seqs(study, qiime_metadata,
-                                        seqinfo_16s, files_16s)
-        samples_seqs += gen_samples_seqs(study, wgs_metadata,
-                                         seqinfo_wgs, files_wgs)
+        samples_seqs = list()
+        if qiime_metadata:
+            samples_seqs += gen_samples_seqs(study, qiime_metadata,
+                                            seqinfo_16s, files_16s)
+        if wgs_metadata:
+            samples_seqs += gen_samples_seqs(study, wgs_metadata,
+                                             seqinfo_wgs, files_wgs)
         xml = to_xml(study, samples_seqs)
         indent(xml)
         et = ET.ElementTree(xml)
@@ -96,7 +114,7 @@ def serialize(study_json, qiime_metadata, seqinfo_16s, files_16s,
     yield {
         "name": "serialize:xml: "+submission_fname,
         "actions": [_write_xml],
-        "file_dep": [qiime_metadata, wgs_metadata],
+        "file_dep": filter(None, [qiime_metadata, wgs_metadata]),
         "targets": [submission_fname]
     }
 
@@ -158,14 +176,14 @@ def upload(files_16s, files_wgs, sub_fname, ready_fname, keyfile,
     yield {
         "name": "upload: "+basename(sub_fname),
         "actions": [_upload(sub_fname, sub_fname+".complete")],
-        "file_dep": complete_fnames,
+        "file_dep": [],
         "targets": [sub_fname+".complete"]
     }
 
     yield {
         "name": "upload: "+basename(ready_fname),
         "actions": [_upload(ready_fname, ready_fname+".complete", True)],
-        "file_dep": complete_fnames+[sub_fname+".complete"],
+        "file_dep": [],
         "targets": [ready_fname+".complete"]
     }
 
